@@ -96,6 +96,47 @@ Custom visitor implementations can subclass :class:`.InspectVisitor` and
 use the :meth:`.InspectVisitor.process` method to visit
 the classes.
 
+Route Reachability
+------------------
+
+The default router evaluates sibling route templates in a fixed order, so a
+route template can be permanently shadowed by another one that is registered
+earlier. The :func:`.inspect_route_reachability` function statically analyzes
+the default router (without compiling it, matching a request, or executing any
+user code) and reports one of the following for each route:
+
+*   :attr:`~.RouteReachabilityInfo.REACHABLE`, together with a concrete
+    :attr:`~.RouteReachabilityInfo.example_path` that is guaranteed to match
+    the route;
+*   :attr:`~.RouteReachabilityInfo.UNREACHABLE`, with a human-readable
+    :attr:`~.RouteReachabilityInfo.reason`; or
+*   :attr:`~.RouteReachabilityInfo.UNKNOWN`, when the template (or a sibling
+    that may be matched first) is outside the subset that can be analyzed
+    exactly.
+
+Only a conservative subset of templates is classified: literal parts may only
+use ASCII letters and digits and the characters ``.``, ``_``, ``-`` (and ``/``
+as the path separator); fields must be simple fields (``{name}``), built-in
+``int`` fields whose ``num_digits``, ``min``, and ``max`` arguments are
+integer or ``None`` literals (e.g. ``{id:int(min=1, max=99)}``), or a built-in
+``path`` field at the end of the template. Everything else is reported as
+:attr:`~.RouteReachabilityInfo.UNKNOWN` rather than guessed.
+
+.. code:: python
+
+    from falcon import inspect
+    from my_module import app
+
+    for info in inspect.inspect_route_reachability(app):
+        print(info)
+
+    # ⇒ /v/{a}.{b} → reachable (e.g. /v/a.a)
+    # ⇒ /v/{x}.json → unreachable: Every matching path is consumed ...
+    # ⇒ /v/{id:uuid} → unknown: The converter "uuid" ...
+
+The analysis is read-only and does not influence request dispatch. It raises
+:class:`TypeError` for applications that use a custom router class.
+
 Inspect Functions Reference
 ---------------------------
 
@@ -104,6 +145,8 @@ This module defines the following inspect functions.
 .. autofunction:: falcon.inspect.inspect_app
 
 .. autofunction:: falcon.inspect.inspect_routes
+
+.. autofunction:: falcon.inspect.inspect_route_reachability
 
 .. autofunction:: falcon.inspect.inspect_middleware
 
@@ -131,6 +174,9 @@ Information returned by the inspect functions is represented by these classes.
     :members:
 
 .. autoclass:: falcon.inspect.RouteInfo
+
+.. autoclass:: falcon.inspect.RouteReachabilityInfo
+    :members:
 
 .. autoclass:: falcon.inspect.RouteMethodInfo
 
